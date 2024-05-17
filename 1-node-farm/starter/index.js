@@ -1,6 +1,7 @@
 const fs = require("fs");
 const http = require("http");
 const url = require("url");
+const replaceTemplate = require("./modules/replaceTemplate");
 //////////////////////////////////////////////////////////////////
 // FILES //
 
@@ -26,6 +27,7 @@ const url = require("url");
 
 //////////////////////////////////////////////////////////////////
 // SERVER //
+
 const productData = fs.readFileSync(`${__dirname}/dev-data/data.json`, "utf-8");
 const tempCard = fs.readFileSync(
   `${__dirname}/templates/template-card.html`,
@@ -33,28 +35,51 @@ const tempCard = fs.readFileSync(
 );
 
 const tempOverview = fs.readFileSync(
-  `${__dirname}/templates/template_overview.html`,
+  `${__dirname}/templates/template-overview.html`,
   "utf8"
 );
-console.log(tempOverview);
-const tempProduct = fs.readFileSync(`${__dirname}/templates/`, "utf-8");
+
+const tempProduct = fs.readFileSync(
+  `${__dirname}/templates/template-product.html`,
+  "utf-8"
+);
 
 const productDataObj = JSON.parse(productData);
 
 const server = http.createServer((req, res) => {
-  const pathName = req.url;
+  // const pathName = req.url;
+  const baseURL = `http://${req.headers.host}`;
+  const requestURL = new URL(req.url, baseURL);
+  const pathname = requestURL.pathname;
+  // console.log(pathname);
+
   // Overview page
-  if (pathName === "/" || pathName === "/overview") {
-    // res.writeHead(200, { "Content-type": "text/html" });
-    // res.end(tempOverview);
-    res.end("This is an overview");
+  if (pathname === "/" || pathname === "/overview") {
+    res.writeHead(200, { "Content-type": "text/html" });
+
+    const cardsHTML = productDataObj.map((el) => replaceTemplate(tempCard, el));
+    // console.log(cardsHTML);
+
+    res.end(tempOverview.replace("{%PRODUCT_CARDS%}", cardsHTML));
   }
   // Product page
-  else if (pathName === "/product") {
-    res.end("This is the product page!");
+  else if (pathname === `/product`) {
+    const query = requestURL.searchParams.get("id");
+    const product = productDataObj[query];
+    if (!product) {
+      res.writeHead(404, { "Content-type": "text/html" });
+      res.end(
+        "<div><h1>Oops! 404. Product not found</h1><a href='/overview'>Back</a></div>"
+      );
+    } else {
+      res.writeHead(200, { "Content-type": "text/html" });
+      const productEl = replaceTemplate(tempProduct, product);
+      // console.log(productEl);
+      res.end(productEl);
+    }
   }
   // API
-  else if (pathName === "/API") {
+  else if (pathname === "/API") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(productData);
   }
@@ -66,7 +91,7 @@ const server = http.createServer((req, res) => {
     });
     res.end("<h1>Page not found!</h1>");
   }
-  // console.log(pathName);
+  // console.log(pathname);
 });
 
 server.listen(8000, "127.0.0.1", () => {
